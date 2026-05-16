@@ -1,119 +1,14 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Sprite Sheet → GIF</title>
-
-<style>
-
-body{
-    background:#111;
-    color:white;
-    font-family:Arial;
-    padding:20px;
-}
-
-.container{
-    display:grid;
-    grid-template-columns:300px 1fr;
-    gap:20px;
-}
-
-.panel{
-    background:#1e1e1e;
-    padding:15px;
-    border-radius:10px;
-}
-
-label{
-    display:block;
-    margin-top:10px;
-}
-
-input,
-button{
-    width:100%;
-    padding:10px;
-    margin-top:5px;
-    border:none;
-    border-radius:8px;
-}
-
-input{
-    background:#333;
-    color:white;
-}
-
-button{
-    background:#4CAF50;
-    color:white;
-    cursor:pointer;
-}
-
-canvas{
-    background:#222;
-    image-rendering:pixelated;
-    border-radius:10px;
-}
-
-img{
-    max-width:100%;
-}
-
-</style>
-</head>
-<body>
-
-<h1>Sprite Sheet → GIF</h1>
-
-<div class="container">
-
-<div class="panel">
-
-<label>Sprite Sheet</label>
-<input type="file" id="upload">
-
-<label>Columnas</label>
-<input type="number" id="cols" value="4">
-
-<label>Filas</label>
-<input type="number" id="rows" value="4">
-
-<label>FPS</label>
-<input type="number" id="fps" value="10">
-
-<label>Escala</label>
-<input type="number" id="scale" value="4">
-
-<button id="previewBtn">Preview</button>
-<button id="exportBtn">Exportar GIF</button>
-
-</div>
-
-<div class="panel">
-
-<canvas id="canvas"></canvas>
-
-<div id="result"></div>
-
-</div>
-
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js"></script>
 
 <script>
+
+const { GIFEncoder, quantize, applyPalette } = GIFenc;
 
 const upload = document.getElementById("upload");
 const colsInput = document.getElementById("cols");
 const rowsInput = document.getElementById("rows");
 const fpsInput = document.getElementById("fps");
 const scaleInput = document.getElementById("scale");
-
-const previewBtn = document.getElementById("previewBtn");
-const exportBtn = document.getElementById("exportBtn");
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -123,35 +18,30 @@ const result = document.getElementById("result");
 let image = new Image();
 let frames = [];
 
-let currentFrame = 0;
 let interval;
+let currentFrame = 0;
 
-upload.addEventListener("change", e=>{
+upload.addEventListener("change", e => {
 
     const file = e.target.files[0];
-
-    if(!file) return;
+    if (!file) return;
 
     const reader = new FileReader();
 
-    reader.onload = ev=>{
+    reader.onload = ev => {
 
-        image.onload = ()=>{
-
-            buildFrames();
+        image.onload = () => {
+            generateFrames();
             startPreview();
-
         };
 
         image.src = ev.target.result;
-
     };
 
     reader.readAsDataURL(file);
-
 });
 
-function buildFrames(){
+function generateFrames() {
 
     frames = [];
 
@@ -166,34 +56,24 @@ function buildFrames(){
     canvas.width = frameWidth * scale;
     canvas.height = frameHeight * scale;
 
-    for(let y=0;y<rows;y++){
-
-        for(let x=0;x<cols;x++){
-
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
             frames.push({
-                x:x * frameWidth,
-                y:y * frameHeight,
-                width:frameWidth,
-                height:frameHeight
+                x: x * frameWidth,
+                y: y * frameHeight,
+                width: frameWidth,
+                height: frameHeight
             });
-
         }
-
     }
-
 }
 
-function drawFrame(index){
-
-    const frame = frames[index];
-
-    if(!frame) return;
+function drawFrame(frame) {
 
     const scale = parseInt(scaleInput.value);
 
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#f8faf7";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.drawImage(
         image,
@@ -206,10 +86,9 @@ function drawFrame(index){
         frame.width * scale,
         frame.height * scale
     );
-
 }
 
-function startPreview(){
+function startPreview() {
 
     clearInterval(interval);
 
@@ -217,70 +96,50 @@ function startPreview(){
 
     currentFrame = 0;
 
-    interval = setInterval(()=>{
+    interval = setInterval(() => {
 
-        drawFrame(currentFrame);
+        drawFrame(frames[currentFrame]);
 
         currentFrame++;
 
-        if(currentFrame >= frames.length){
-
+        if (currentFrame >= frames.length) {
             currentFrame = 0;
-
         }
 
-    },1000 / fps);
-
+    }, 1000 / fps);
 }
 
-previewBtn.addEventListener("click", ()=>{
-
-    buildFrames();
+document.getElementById("previewBtn").addEventListener("click", () => {
+    generateFrames();
     startPreview();
-
 });
 
-exportBtn.addEventListener("click", ()=>{
+document.getElementById("exportBtn").addEventListener("click", async () => {
 
-    if(!image.src){
-
-        alert("Carga un sprite sheet");
-        return;
-
-    }
-
-    const cols = parseInt(colsInput.value);
-    const rows = parseInt(rowsInput.value);
+    const fps = parseInt(fpsInput.value);
     const scale = parseInt(scaleInput.value);
 
-    const frameWidth = image.width / cols;
-    const frameHeight = image.height / rows;
+    const frameWidth = image.width / parseInt(colsInput.value);
+    const frameHeight = image.height / parseInt(rowsInput.value);
 
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
+    const off = document.createElement("canvas");
+    const octx = off.getContext("2d");
 
-    tempCanvas.width = frameWidth * scale;
-    tempCanvas.height = frameHeight * scale;
+    off.width = frameWidth * scale;
+    off.height = frameHeight * scale;
 
-    tempCtx.imageSmoothingEnabled = false;
+    const encoder = new GIFEncoder(off.width, off.height);
 
-    const gif = new GIF({
+    encoder.setDelay(1000 / fps);
+    encoder.setRepeat(0);
+    encoder.start();
 
-        workers:2,
-        quality:1,
-        width:tempCanvas.width,
-        height:tempCanvas.height,
-        workerScript:"https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js"
+    for (let frame of frames) {
 
-    });
+        octx.fillStyle = "#f8faf7";
+        octx.fillRect(0, 0, off.width, off.height);
 
-    const delay = 1000 / parseInt(fpsInput.value);
-
-    frames.forEach(frame=>{
-
-        tempCtx.clearRect(0,0,tempCanvas.width,tempCanvas.height);
-
-        tempCtx.drawImage(
+        octx.drawImage(
             image,
             frame.x,
             frame.y,
@@ -292,40 +151,22 @@ exportBtn.addEventListener("click", ()=>{
             frame.height * scale
         );
 
-        gif.addFrame(tempCanvas,{
-            copy:true,
-            delay:delay
-        });
+        encoder.addFrame(octx);
+    }
 
-    });
+    const blob = encoder.finish();
 
-    exportBtn.innerText = "Generando...";
+    const url = URL.createObjectURL(encoder.out.getData ? new Blob([encoder.out.getData()], { type: "image/gif" }) : new Blob([]));
 
-    gif.on("finished", blob=>{
-
-        const url = URL.createObjectURL(blob);
-
-        result.innerHTML = `
-            <h2>GIF Exportado</h2>
-
-            <img src="${url}">
-
-            <br><br>
-
-            <a href="${url}" download="sprite.gif">
-                <button>Descargar GIF</button>
-            </a>
-        `;
-
-        exportBtn.innerText = "Exportar GIF";
-
-    });
-
-    gif.render();
+    result.innerHTML = `
+        <h3>GIF listo</h3>
+        <img src="${url}">
+        <br><br>
+        <a download="sprite.gif" href="${url}">
+            <button>Descargar GIF</button>
+        </a>
+    `;
 
 });
 
 </script>
-
-</body>
-</html>
