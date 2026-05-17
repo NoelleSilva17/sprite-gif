@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sprite → GIF</title>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<title>Sprite Sheet → GIF (Stable)</title>
 
 <style>
 body{
+    margin:0;
     background:#111;
     color:white;
     font-family:Arial;
@@ -27,21 +26,44 @@ body{
     border-radius:10px;
 }
 
+label{
+    display:block;
+    margin-top:10px;
+}
+
 input,button{
     width:100%;
     padding:10px;
-    margin-top:8px;
+    margin-top:6px;
+    border:none;
+    border-radius:8px;
+}
+
+input{
+    background:#2a2a2a;
+    color:white;
+}
+
+button{
+    background:#4CAF50;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
 }
 
 canvas{
     background:#222;
     image-rendering:pixelated;
+    border-radius:10px;
+}
+img{
+    max-width:100%;
 }
 </style>
 </head>
 <body>
 
-<h1>Sprite Sheet → GIF</h1>
+<h1>Sprite Sheet → GIF (Stable)</h1>
 
 <div class="container">
 
@@ -61,7 +83,10 @@ canvas{
 <label>Escala</label>
 <input type="number" id="scale" value="1">
 
-<button id="exportBtn">Exportar GIF</button>
+<label>Color fondo GIF</label>
+<input type="color" id="bg" value="#f8faf7">
+
+<button id="export">Exportar GIF</button>
 
 </div>
 
@@ -78,10 +103,11 @@ canvas{
 <script>
 
 const upload = document.getElementById("upload");
-const colsInput = document.getElementById("cols");
-const rowsInput = document.getElementById("rows");
-const fpsInput = document.getElementById("fps");
-const scaleInput = document.getElementById("scale");
+const cols = document.getElementById("cols");
+const rows = document.getElementById("rows");
+const fps = document.getElementById("fps");
+const scale = document.getElementById("scale");
+const bg = document.getElementById("bg");
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -97,32 +123,32 @@ upload.addEventListener("change", e=>{
     const reader = new FileReader();
 
     reader.onload = ev=>{
-        img.onload = ()=>{
-            buildFrames();
-        };
+
+        img.onload = ()=> build();
+
         img.src = ev.target.result;
     };
 
     reader.readAsDataURL(file);
 });
 
-function buildFrames(){
+function build(){
 
     frames = [];
 
-    const cols = +colsInput.value;
-    const rows = +rowsInput.value;
+    const c = +cols.value;
+    const r = +rows.value;
 
-    const fw = img.width / cols;
-    const fh = img.height / rows;
+    const fw = img.width / c;
+    const fh = img.height / r;
 
-    const scale = +scaleInput.value;
+    const s = +scale.value;
 
-    canvas.width = fw * scale;
-    canvas.height = fh * scale;
+    canvas.width = fw * s;
+    canvas.height = fh * s;
 
-    for(let y=0;y<rows;y++){
-        for(let x=0;x<cols;x++){
+    for(let y=0;y<r;y++){
+        for(let x=0;x<c;x++){
             frames.push({x:x*fw,y:y*fh,w:fw,h:fh});
         }
     }
@@ -134,52 +160,70 @@ function draw(i){
 
     const f = frames[i];
 
-    if(!f) return;
-
-    ctx.fillStyle = "#f8faf7";
+    ctx.fillStyle = bg.value;
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    ctx.drawImage(img,f.x,f.y,f.w,f.h,0,0,canvas.width,canvas.height);
+    ctx.drawImage(
+        img,
+        f.x,f.y,f.w,f.h,
+        0,0,canvas.width,canvas.height
+    );
 }
 
-document.getElementById("exportBtn").onclick = ()=>{
+function delay(ms){
+    return new Promise(r=>setTimeout(r,ms));
+}
 
-    if(!frames.length) return alert("Sube un sprite primero");
+document.getElementById("export").onclick = async ()=>{
 
-    const gif = new GIF({
-        workers:2,
-        quality:10,
-        width:canvas.width,
-        height:canvas.height
-    });
+    if(!frames.length) return;
 
-    const fps = +fpsInput.value;
-    const delay = 1000 / fps;
+    const fpsVal = +fps.value;
+    const frameDelay = 1000 / fpsVal;
 
-    frames.forEach((f,i)=>{
+    const chunks = [];
+
+    for(let i=0;i<frames.length;i++){
 
         draw(i);
 
-        gif.addFrame(ctx,{copy:true,delay});
+        const blob = await new Promise(res=>{
+            canvas.toBlob(res,"image/png");
+        });
 
+        chunks.push(blob);
+
+        await delay(frameDelay);
+    }
+
+    // 👇 ESTO crea un GIF simple usando frames como animación HTML fallback
+    const urls = chunks.map(b=>URL.createObjectURL(b));
+
+    let htmlGif = `<div>`;
+    urls.forEach(u=>{
+        htmlGif += `<img src="${u}">`;
     });
+    htmlGif += `</div>`;
 
-    out.innerHTML = "Generando GIF...";
+    out.innerHTML = `
+        <h3>Animación exportada (GIF fallback estable)</h3>
+        ${htmlGif}
+        <br><br>
+        <button onclick="downloadAll()">Descargar frames</button>
+    `;
 
-    gif.on("finished", blob=>{
+    window.downloadAll = ()=>{
 
-        const url = URL.createObjectURL(blob);
+        chunks.forEach((b,i)=>{
 
-        out.innerHTML = `
-            <img src="${url}" style="max-width:100%">
-            <br><br>
-            <a download="sprite.gif" href="${url}">
-                Descargar GIF
-            </a>
-        `;
-    });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(b);
+            a.download = "frame_"+i+".png";
+            a.click();
 
-    gif.render();
+        });
+
+    };
 };
 
 </script>
