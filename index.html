@@ -1,8 +1,81 @@
-<script src="https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js"></script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite → GIF</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
+<style>
+body{
+    background:#111;
+    color:white;
+    font-family:Arial;
+    padding:20px;
+}
+
+.container{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    gap:20px;
+}
+
+.panel{
+    background:#1e1e1e;
+    padding:15px;
+    border-radius:10px;
+}
+
+input,button{
+    width:100%;
+    padding:10px;
+    margin-top:8px;
+}
+
+canvas{
+    background:#222;
+    image-rendering:pixelated;
+}
+</style>
+</head>
+<body>
+
+<h1>Sprite Sheet → GIF</h1>
+
+<div class="container">
+
+<div class="panel">
+
+<input type="file" id="upload">
+
+<label>Columnas</label>
+<input type="number" id="cols" value="22">
+
+<label>Filas</label>
+<input type="number" id="rows" value="1">
+
+<label>FPS</label>
+<input type="number" id="fps" value="10">
+
+<label>Escala</label>
+<input type="number" id="scale" value="1">
+
+<button id="exportBtn">Exportar GIF</button>
+
+</div>
+
+<div class="panel">
+
+<canvas id="canvas"></canvas>
+
+<div id="out"></div>
+
+</div>
+
+</div>
 
 <script>
-
-const { GIFEncoder, quantize, applyPalette } = GIFenc;
 
 const upload = document.getElementById("upload");
 const colsInput = document.getElementById("cols");
@@ -13,160 +86,103 @@ const scaleInput = document.getElementById("scale");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const result = document.getElementById("result");
+const out = document.getElementById("out");
 
-let image = new Image();
+let img = new Image();
 let frames = [];
 
-let interval;
-let currentFrame = 0;
-
-upload.addEventListener("change", e => {
+upload.addEventListener("change", e=>{
 
     const file = e.target.files[0];
-    if (!file) return;
-
     const reader = new FileReader();
 
-    reader.onload = ev => {
-
-        image.onload = () => {
-            generateFrames();
-            startPreview();
+    reader.onload = ev=>{
+        img.onload = ()=>{
+            buildFrames();
         };
-
-        image.src = ev.target.result;
+        img.src = ev.target.result;
     };
 
     reader.readAsDataURL(file);
 });
 
-function generateFrames() {
+function buildFrames(){
 
     frames = [];
 
-    const cols = parseInt(colsInput.value);
-    const rows = parseInt(rowsInput.value);
+    const cols = +colsInput.value;
+    const rows = +rowsInput.value;
 
-    const frameWidth = image.width / cols;
-    const frameHeight = image.height / rows;
+    const fw = img.width / cols;
+    const fh = img.height / rows;
 
-    const scale = parseInt(scaleInput.value);
+    const scale = +scaleInput.value;
 
-    canvas.width = frameWidth * scale;
-    canvas.height = frameHeight * scale;
+    canvas.width = fw * scale;
+    canvas.height = fh * scale;
 
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-            frames.push({
-                x: x * frameWidth,
-                y: y * frameHeight,
-                width: frameWidth,
-                height: frameHeight
-            });
+    for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+            frames.push({x:x*fw,y:y*fh,w:fw,h:fh});
         }
     }
+
+    draw(0);
 }
 
-function drawFrame(frame) {
+function draw(i){
 
-    const scale = parseInt(scaleInput.value);
+    const f = frames[i];
+
+    if(!f) return;
 
     ctx.fillStyle = "#f8faf7";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    ctx.drawImage(
-        image,
-        frame.x,
-        frame.y,
-        frame.width,
-        frame.height,
-        0,
-        0,
-        frame.width * scale,
-        frame.height * scale
-    );
+    ctx.drawImage(img,f.x,f.y,f.w,f.h,0,0,canvas.width,canvas.height);
 }
 
-function startPreview() {
+document.getElementById("exportBtn").onclick = ()=>{
 
-    clearInterval(interval);
+    if(!frames.length) return alert("Sube un sprite primero");
 
-    const fps = parseInt(fpsInput.value);
+    const gif = new GIF({
+        workers:2,
+        quality:10,
+        width:canvas.width,
+        height:canvas.height
+    });
 
-    currentFrame = 0;
+    const fps = +fpsInput.value;
+    const delay = 1000 / fps;
 
-    interval = setInterval(() => {
+    frames.forEach((f,i)=>{
 
-        drawFrame(frames[currentFrame]);
+        draw(i);
 
-        currentFrame++;
+        gif.addFrame(ctx,{copy:true,delay});
 
-        if (currentFrame >= frames.length) {
-            currentFrame = 0;
-        }
+    });
 
-    }, 1000 / fps);
-}
+    out.innerHTML = "Generando GIF...";
 
-document.getElementById("previewBtn").addEventListener("click", () => {
-    generateFrames();
-    startPreview();
-});
+    gif.on("finished", blob=>{
 
-document.getElementById("exportBtn").addEventListener("click", async () => {
+        const url = URL.createObjectURL(blob);
 
-    const fps = parseInt(fpsInput.value);
-    const scale = parseInt(scaleInput.value);
+        out.innerHTML = `
+            <img src="${url}" style="max-width:100%">
+            <br><br>
+            <a download="sprite.gif" href="${url}">
+                Descargar GIF
+            </a>
+        `;
+    });
 
-    const frameWidth = image.width / parseInt(colsInput.value);
-    const frameHeight = image.height / parseInt(rowsInput.value);
-
-    const off = document.createElement("canvas");
-    const octx = off.getContext("2d");
-
-    off.width = frameWidth * scale;
-    off.height = frameHeight * scale;
-
-    const encoder = new GIFEncoder(off.width, off.height);
-
-    encoder.setDelay(1000 / fps);
-    encoder.setRepeat(0);
-    encoder.start();
-
-    for (let frame of frames) {
-
-        octx.fillStyle = "#f8faf7";
-        octx.fillRect(0, 0, off.width, off.height);
-
-        octx.drawImage(
-            image,
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height,
-            0,
-            0,
-            frame.width * scale,
-            frame.height * scale
-        );
-
-        encoder.addFrame(octx);
-    }
-
-    const blob = encoder.finish();
-
-    const url = URL.createObjectURL(encoder.out.getData ? new Blob([encoder.out.getData()], { type: "image/gif" }) : new Blob([]));
-
-    result.innerHTML = `
-        <h3>GIF listo</h3>
-        <img src="${url}">
-        <br><br>
-        <a download="sprite.gif" href="${url}">
-            <button>Descargar GIF</button>
-        </a>
-    `;
-
-});
+    gif.render();
+};
 
 </script>
+
+</body>
+</html>
